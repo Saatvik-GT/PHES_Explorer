@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PHES Site Explorer — ANU RE100</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+  :root {
+    --bg:       #0b0f0e;
+    --bg2:      #111815;
+    --bg3:      #182320;
+    --border:   #1e2e29;
+    --border2:  #253530;
+    --text:     #d4e8e1;
+    --text2:    #7fa898;
+    --text3:    #3d6058;
+    --accent:   #00e5a0;
+    --accent2:  #00b87d;
+    --amber:    #f5a623;
+    --red:      #e05252;
+    --blue:     #4db8ff;
+    --purple:   #a78bfa;
+    --mono:     'DM Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+    --display:  'Syne', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* HEADER */
+  header { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 1000; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-mark { width: 32px; height: 32px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 800; font-size: 14px; color: #000; letter-spacing: -0.5px; }
+  .logo-text { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: -0.3px; color: var(--text); }
+  .logo-sub { font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 0.5px; text-transform: uppercase; margin-top: 1px; }
+  .header-stats { display: flex; gap: 32px; align-items: center; }
+  .hstat { text-align: right; }
+  .hstat-val { font-family: var(--mono); font-size: 16px; font-weight: 500; color: var(--accent); line-height: 1; }
+  .hstat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .badge { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border2); color: var(--text3); letter-spacing: 0.5px; }
+  .badge.live { border-color: var(--accent2); color: var(--accent); }
+
+  /* LAYOUT */
+  .app-body { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+  .sidebar-section { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .section-label { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+
+  /* FILTERS */
+  .filter-row { margin-bottom: 12px; }
+  .filter-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; font-size: 12px; color: var(--text2); font-weight: 500; }
+  .filter-val { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+  input[type=range] { -webkit-appearance: none; width: 100%; height: 3px; appearance: none; background: var(--border2); border-radius: 2px; outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 2px solid var(--bg2); transition: transform 0.15s; }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+  .filter-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+  .filter-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .toggle-btn { padding: 5px 6px; border-radius: 5px; border: 1px solid var(--border2); background: transparent; color: var(--text2); font-family: var(--mono); font-size: 9px; cursor: pointer; text-align: center; transition: all 0.15s; letter-spacing: 0.3px; }
+  .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 500; }
+  .upload-btn { width: 100%; padding: 7px 10px; border-radius: 7px; border: 1px solid var(--border2); background: transparent; color: var(--text2); font-family: var(--mono); font-size: 11px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px; text-align: center; display: block; }
+  .upload-btn:hover { border-color: var(--accent2); color: var(--accent); }
+  .sidebar-note { font-family: var(--mono); font-size: 9px; color: var(--text3); line-height: 1.45; margin-top: 8px; }
+  .data-status { font-family: var(--mono); font-size: 10px; color: var(--text2); line-height: 1.4; margin-top: 8px; }
+  .data-status.error { color: var(--red); }
+  .section-spacer { margin-top: 6px; }
+
+  /* SITE LIST */
+  .site-list { flex: 1; min-height: 180px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+  .site-list-header { padding: 10px 18px 7px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--bg2); border-bottom: 1px solid var(--border); z-index: 10; }
+  .site-count { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+  .sort-btn { background: none; border: none; font-family: var(--mono); font-size: 10px; color: var(--text3); cursor: pointer; padding: 3px 6px; border-radius: 4px; transition: all 0.15s; }
+  .sort-btn:hover { background: var(--border); color: var(--text2); }
+  .sort-btn.active { color: var(--accent); }
+  .site-item { padding: 11px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.12s; position: relative; }
+  .site-item:hover { background: var(--bg3); }
+  .site-item.selected { background: var(--bg3); border-left: 2px solid var(--accent); padding-left: 16px; }
+  .site-item-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px; }
+  .site-id { font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 0.5px; }
+  .site-name { font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
+  .site-meta { display: flex; gap: 8px; font-family: var(--mono); font-size: 10px; color: var(--text3); flex-wrap: wrap; }
+  .site-pill { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border-radius: 3px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.3px; }
+  .pill-high { background: rgba(0,229,160,0.1); color: var(--accent); }
+  .pill-mid  { background: rgba(245,166,35,0.1); color: var(--amber); }
+  .pill-low  { background: rgba(224,82,82,0.1);  color: var(--red); }
+  .pill-cost-a { background: rgba(0,229,160,0.12); color: var(--accent); }
+  .pill-cost-b { background: rgba(77,184,255,0.12); color: var(--blue); }
+  .pill-cost-c { background: rgba(245,166,35,0.12); color: var(--amber); }
+  .pill-cost-d { background: rgba(224,82,82,0.12); color: var(--red); }
+  .pill-cost-e { background: rgba(167,139,250,0.12); color: var(--purple); }
+
+  /* MAP */
+  .map-wrap { flex: 1; position: relative; overflow: hidden; }
+  #map, #terrain-3d { position: absolute; inset: 0; }
+  #map { background: var(--bg); }
+  #terrain-3d { background: radial-gradient(circle at 25% 20%, #1a2722 0%, #0b0f0e 68%); display: none; z-index: 350; }
+  .terrain-info { position: absolute; top: 16px; left: 16px; z-index: 820; background: rgba(17,24,21,0.92); border: 1px solid var(--border2); border-radius: 8px; padding: 9px 11px; font-family: var(--mono); font-size: 10px; color: var(--text2); line-height: 1.4; max-width: 290px; display: none; }
+  .map-wrap.dual-mode #map { inset: 0 auto 0 0; width: 50%; border-right: 1px solid var(--border); }
+  .map-wrap.dual-mode #terrain-3d { inset: 0 0 0 auto; width: 50%; border-left: 1px solid var(--border); }
+  .map-wrap.dual-mode .terrain-info { left: calc(50% + 16px); }
+  .leaflet-tile-pane { filter: saturate(0.15) brightness(0.35) hue-rotate(120deg); }
+  .leaflet-container { background: var(--bg) !important; }
+
+  /* MAP CONTROLS */
+  .map-controls { position: absolute; top: 16px; right: 16px; z-index: 800; display: flex; flex-direction: column; gap: 8px; }
+  .map-ctrl-btn { background: var(--bg2); border: 1px solid var(--border2); color: var(--text2); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .map-ctrl-btn:hover { border-color: var(--accent2); color: var(--accent); }
+  .map-legend { position: absolute; bottom: 32px; left: 16px; z-index: 800; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .legend-title { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-family: var(--mono); font-size: 10px; color: var(--text2); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* PAIR LINE on map */
+  .pair-line { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.7; }
+
+  /* DETAIL PANEL */
+  .detail-panel { width: 300px; flex-shrink: 0; background: var(--bg2); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; transform: translateX(300px); transition: transform 0.25s cubic-bezier(0.4,0,0.2,1); }
+  .detail-panel.open { transform: translateX(0); }
+  .detail-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; }
+  .detail-close { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 18px; line-height: 1; padding: 0; transition: color 0.15s; }
+  .detail-close:hover { color: var(--text); }
+  .detail-body { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; padding: 0 0 20px; }
+  .detail-site-name { font-family: var(--display); font-size: 16px; font-weight: 700; color: var(--text); line-height: 1.2; margin-bottom: 4px; }
+  .detail-coords { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+  .detail-energy-big { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .energy-row { display: flex; gap: 20px; align-items: flex-start; }
+  .energy-block { flex: 1; }
+  .energy-num { font-family: var(--display); font-size: 36px; font-weight: 800; color: var(--accent); line-height: 1; display: inline; }
+  .energy-unit { font-family: var(--mono); font-size: 13px; color: var(--accent2); margin-left: 4px; }
+  .energy-label { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+  .cost-class-badge { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; font-family: var(--display); font-weight: 800; font-size: 20px; margin-top: 4px; }
+  .ccA { background: rgba(0,229,160,0.15); color: var(--accent); }
+  .ccB { background: rgba(77,184,255,0.15); color: var(--blue); }
+  .ccC { background: rgba(245,166,35,0.15); color: var(--amber); }
+  .ccD { background: rgba(224,82,82,0.15); color: var(--red); }
+  .ccE { background: rgba(167,139,250,0.15); color: var(--purple); }
+  .detail-metrics { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .metric-section { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin: 10px 0 6px; }
+  .metric-section:first-child { margin-top: 0; }
+  .metric-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-key { font-size: 11px; color: var(--text2); }
+  .metric-val { font-family: var(--mono); font-size: 11px; color: var(--text); font-weight: 500; }
+  .bar-wrap { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .bar-label { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .bar-name { font-size: 11px; color: var(--text2); width: 60px; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+  .bar-num { font-family: var(--mono); font-size: 10px; color: var(--text3); width: 34px; text-align: right; flex-shrink: 0; }
+  .detail-action { padding: 14px 18px; }
+  .action-btn { width: 100%; padding: 10px; border-radius: 8px; border: none; background: var(--accent); color: #000; font-family: var(--display); font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px; margin-bottom: 7px; }
+  .action-btn:hover { background: #00ffb3; transform: translateY(-1px); }
+  .action-btn-outline { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid var(--border2); background: transparent; color: var(--text2); font-family: var(--mono); font-size: 11px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px; margin-bottom: 7px; }
+  .action-btn-outline:hover { border-color: var(--accent2); color: var(--accent); }
+
+  /* PAIR COORDS TABLE */
+  .pair-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 10px; }
+  .pair-table th { color: var(--text3); font-weight: 400; padding: 4px 0; text-align: left; border-bottom: 1px solid var(--border); }
+  .pair-table td { color: var(--text2); padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .pair-table td:last-child, .pair-table th:last-child { text-align: right; color: var(--accent); }
+
+  /* CHART TAB */
+  .chart-panel { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .mini-chart { width: 100%; height: 80px; position: relative; margin-top: 8px; }
+  .mini-chart canvas { width: 100% !important; }
+
+  /* custom marker */
+  .phes-marker { border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); cursor: pointer; transition: transform 0.15s; }
+  .phes-marker:hover { transform: scale(1.4) !important; }
+  .phes-marker-lower { border-radius: 4px; cursor: pointer; opacity: 0.7; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .site-item { animation: fadeUp 0.2s ease both; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">PH</div>
+    <div>
+      <div class="logo-text">PHES Site Explorer</div>
+      <div class="logo-sub">ANU RE100 · Pumped Hydro Atlas</div>
+    </div>
+  </div>
+  <div class="header-stats">
+    <div class="hstat"><div class="hstat-val" id="stat-sites">—</div><div class="hstat-label">Sites shown</div></div>
+    <div class="hstat"><div class="hstat-val" id="stat-energy">—</div><div class="hstat-label">Total TWh</div></div>
+    <div class="hstat"><div class="hstat-val" id="stat-power">—</div><div class="hstat-label">Total GW</div></div>
+    <div class="hstat"><div class="hstat-val" id="stat-countries">—</div><div class="hstat-label">Countries</div></div>
+  </div>
+  <div class="header-right">
+    <span class="badge live" id="badge-source">● DEMO DATA</span>
+    <span class="badge">v2.0.0</span>
+  </div>
+</header>
+
+<div class="app-body">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="section-label">Data source</div>
+      <label class="upload-btn" for="csv-input">Load PHES CSV</label>
+      <input id="csv-input" type="file" accept=".csv,text/csv" style="display:none"/>
+      <label class="upload-btn section-spacer" for="dem-input">Load DEM GeoTIFF (3D)</label>
+      <input id="dem-input" type="file" accept=".tif,.tiff,.geotiff,image/tiff" style="display:none"/>
+      <button class="action-btn-outline section-spacer" id="btn-use-demo">Use demo dataset</button>
+      <button class="action-btn-outline section-spacer" id="btn-clear-dem">Clear DEM</button>
+      <div class="sidebar-note">Compatible with PHES_Searching CSV output. Columns: Pair Identifier, Upper/Lower latitude & longitude, Head (m), Energy (GWh), Volume (GL), Pourpoint separation (km), Upper/Lower max dam height (m), Upper/Lower area estimate (ha), Storage time (h), Cost class (A–E).</div>
+      <div class="data-status" id="data-status">Using built-in demo data.</div>
+      <div class="data-status" id="dem-status">3D DEM mode inactive.</div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-label">Filters</div>
+
+      <div class="filter-row">
+        <div class="filter-label">Min Energy <span class="filter-val" id="lbl-energy">0 GWh</span></div>
+        <input type="range" id="f-energy" min="0" max="20" value="0" step="0.5"/>
+      </div>
+      <div class="filter-row">
+        <div class="filter-label">Min Head Height <span class="filter-val" id="lbl-head">0 m</span></div>
+        <input type="range" id="f-head" min="0" max="1000" value="0" step="25"/>
+      </div>
+      <div class="filter-row">
+        <div class="filter-label">Max Separation <span class="filter-val" id="lbl-sep">Any km</span></div>
+        <input type="range" id="f-sep" min="1" max="20" value="20" step="0.5"/>
+      </div>
+      <div class="filter-row">
+        <div class="filter-label">Storage Duration <span class="filter-val" id="lbl-storage">Any</span></div>
+        <div class="filter-grid">
+          <button class="toggle-btn active" data-storage="all">All</button>
+          <button class="toggle-btn" data-storage="6">6 h</button>
+          <button class="toggle-btn" data-storage="18">18 h</button>
+          <button class="toggle-btn" data-storage="50">50 h</button>
+          <button class="toggle-btn" data-storage="168">168 h</button>
+          <button class="toggle-btn" data-storage="504">504 h</button>
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="filter-label">Cost Class <span class="filter-val" id="lbl-cost">All</span></div>
+        <div class="filter-grid">
+          <button class="toggle-btn active" data-cost="all">All</button>
+          <button class="toggle-btn" data-cost="A">A ★</button>
+          <button class="toggle-btn" data-cost="B">B</button>
+          <button class="toggle-btn" data-cost="C">C</button>
+          <button class="toggle-btn" data-cost="D">D</button>
+          <button class="toggle-btn" data-cost="E">E</button>
+        </div>
+      </div>
+      <div class="filter-row">
+        <div class="filter-label">Region</div>
+        <div class="filter-grid">
+          <button class="toggle-btn active" data-region="all">All</button>
+          <button class="toggle-btn" data-region="Asia">Asia</button>
+          <button class="toggle-btn" data-region="Europe">Europe</button>
+          <button class="toggle-btn" data-region="Americas">Americas</button>
+          <button class="toggle-btn" data-region="Africa">Africa</button>
+          <button class="toggle-btn" data-region="Oceania">Oceania</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="site-list-header">
+      <span class="site-count" id="site-count">— sites</span>
+      <div style="display:flex;gap:3px">
+        <button class="sort-btn active" data-sort="energy">E↓</button>
+        <button class="sort-btn" data-sort="head">H↓</button>
+        <button class="sort-btn" data-sort="sep">Sep↑</button>
+        <button class="sort-btn" data-sort="cost_class">Cost↑</button>
+      </div>
+    </div>
+    <div class="site-list" id="site-list"></div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div id="terrain-3d"></div>
+    <div class="terrain-info" id="terrain-info">Load a DEM GeoTIFF to enable 3D terrain mode.</div>
+    <div class="map-controls">
+      <button class="map-ctrl-btn ctrl-2d" onclick="map.zoomIn()">+</button>
+      <button class="map-ctrl-btn ctrl-2d" onclick="map.zoomOut()">−</button>
+      <button class="map-ctrl-btn ctrl-2d" title="Fit all" onclick="fitAll()">⊡</button>
+      <button class="map-ctrl-btn ctrl-2d" title="Toggle pair lines" id="btn-pairs" onclick="togglePairLines()">⇌</button>
+      <button class="map-ctrl-btn" id="btn-mode" title="Toggle 2D/3D" disabled>3D</button>
+    </div>
+    <div class="map-legend">
+      <div class="legend-title">Energy capacity</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#00e5a0"></div>&gt; 10 GWh</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#f5a623"></div>3 – 10 GWh</div>
+      <div class="legend-row"><div class="legend-dot" style="background:#e05252"></div>&lt; 3 GWh</div>
+      <div class="legend-title" style="margin-top:10px">Cost class</div>
+      <div class="legend-row"><span style="font-family:var(--mono);font-size:10px;color:var(--accent)">A</span> Best value</div>
+      <div class="legend-row"><span style="font-family:var(--mono);font-size:10px;color:var(--red)">E</span> Highest cost</div>
+    </div>
+  </div>
+
+  <!-- DETAIL PANEL -->
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-header">
+      <div>
+        <div class="detail-site-name" id="d-name">—</div>
+        <div class="detail-coords" id="d-coords">—</div>
+      </div>
+      <button class="detail-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-body">
+
+      <div class="detail-energy-big">
+        <div class="energy-row">
+          <div class="energy-block">
+            <div><span class="energy-num" id="d-energy">—</span><span class="energy-unit">GWh</span></div>
+            <div class="energy-label">Storage capacity</div>
+            <div style="margin-top:8px"><span class="energy-num" style="font-size:22px" id="d-power">—</span><span class="energy-unit" style="font-size:11px">GW</span></div>
+            <div class="energy-label">Power output</div>
+          </div>
+          <div>
+            <div class="cost-class-badge" id="d-cost-badge">—</div>
+            <div class="energy-label" style="text-align:center;margin-top:4px">Cost class</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reservoir pair table -->
+      <div class="detail-metrics">
+        <div class="section-label">Reservoir pair</div>
+        <table class="pair-table">
+          <tr><th></th><th>Upper</th><th>Lower</th></tr>
+          <tr><td>Latitude</td><td id="d-ulat">—</td><td id="d-llat">—</td></tr>
+          <tr><td>Longitude</td><td id="d-ulon">—</td><td id="d-llon">—</td></tr>
+          <tr><td>Max dam (m)</td><td id="d-udamh">—</td><td id="d-ldamh">—</td></tr>
+          <tr><td>Area (ha)</td><td id="d-uarea">—</td><td id="d-larea">—</td></tr>
+        </table>
+
+        <div class="metric-section">Hydraulics</div>
+        <div class="metric-row"><span class="metric-key">Head height</span><span class="metric-val" id="d-head">—</span></div>
+        <div class="metric-row"><span class="metric-key">Water volume</span><span class="metric-val" id="d-volume">—</span></div>
+        <div class="metric-row"><span class="metric-key">Pourpoint separation</span><span class="metric-val" id="d-sep">—</span></div>
+        <div class="metric-row"><span class="metric-key">Storage duration</span><span class="metric-val" id="d-storage">—</span></div>
+        <div class="metric-row"><span class="metric-key">Slope category</span><span class="metric-val" id="d-slope">—</span></div>
+        <div class="metric-row"><span class="metric-key">Water/rock ratio</span><span class="metric-val" id="d-wratio">—</span></div>
+
+        <div class="metric-section">Site</div>
+        <div class="metric-row"><span class="metric-key">Country</span><span class="metric-val" id="d-country">—</span></div>
+        <div class="metric-row"><span class="metric-key">Region</span><span class="metric-val" id="d-region">—</span></div>
+        <div class="metric-row"><span class="metric-key">Altitude (upper)</span><span class="metric-val" id="d-alt">—</span></div>
+      </div>
+
+      <div class="bar-wrap">
+        <div class="bar-label">Relative to dataset max</div>
+        <div class="bar-row"><span class="bar-name">Energy</span><div class="bar-track"><div class="bar-fill" id="bar-energy" style="background:var(--accent);width:0%"></div></div><span class="bar-num" id="barlbl-energy">—</span></div>
+        <div class="bar-row"><span class="bar-name">Head</span><div class="bar-track"><div class="bar-fill" id="bar-head" style="background:var(--blue);width:0%"></div></div><span class="bar-num" id="barlbl-head">—</span></div>
+        <div class="bar-row"><span class="bar-name">Volume</span><div class="bar-track"><div class="bar-fill" id="bar-volume" style="background:var(--amber);width:0%"></div></div><span class="bar-num" id="barlbl-volume">—</span></div>
+        <div class="bar-row"><span class="bar-name">Power</span><div class="bar-track"><div class="bar-fill" id="bar-power" style="background:var(--purple);width:0%"></div></div><span class="bar-num" id="barlbl-power">—</span></div>
+      </div>
+
+      <div class="detail-action">
+        <button class="action-btn" onclick="exportSite()">Export site CSV</button>
+        <button class="action-btn-outline" onclick="openOSM()">View on OpenStreetMap</button>
+        <button class="action-btn-outline" onclick="zoomPair()">Zoom to pair</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── REAL ANU PHES_Searching column schema demo data ─────────────────────────
+// Columns match actual PHES_Searching output:
+// Pair Identifier, Upper latitude, Upper longitude, Lower latitude, Lower longitude,
+// Head (m), Energy (GWh), Volume (GL), Pourpoint separation (km),
+// Upper max dam height (m), Lower max dam height (m),
+// Upper area estimate (ha), Lower area estimate (ha),
+// Storage time (h), Slope, Water-rock ratio, Altitude (m), Country, Region, Cost class
+function makeSite(id,name,country,region,ulat,ulon,llat,llon,head,energy,volume,sep,udamh,ldamh,uarea,larea,storage,slope,wratio,alt,costClass) {
+  const power = energy / storage;
+  return { id, name, country, region, ulat, ulon, llat, llon, head, energy, volume, sep, udamh, ldamh, uarea, larea, storage, slope, wratio, alt, costClass, power,
+    lat: ulat, lon: ulon };
+}
+
+const DEMO_SITES = [
+  makeSite('AU-GF-000421','Snowy Mountains North','Australia','Oceania',-36.12,148.52,-36.18,148.61,870,19.5,22.0,8.4,68,54,312,280,18,'Moderate',4.2,1820,'A'),
+  makeSite('AU-GF-000842','Blue Mountains Upper','Australia','Oceania',-33.58,150.22,-33.66,150.31,520,9.3,14.5,6.1,42,38,187,162,18,'Moderate',3.8,920,'B'),
+  makeSite('AU-GF-001203','Snowy South Ridge','Australia','Oceania',-36.48,148.21,-36.55,148.32,680,13.1,17.2,7.2,55,47,244,211,18,'Gentle',5.1,1580,'A'),
+  makeSite('AU-GF-001744','Kosciuszko Plateau','Australia','Oceania',-36.32,148.41,-36.40,148.55,740,14.8,19.1,9.3,61,52,278,239,50,'Moderate',3.6,1920,'B'),
+  makeSite('AU-GF-002210','Tasmanian Highlands','Australia','Oceania',-41.87,146.38,-41.95,146.48,610,11.4,15.8,7.8,50,43,221,194,18,'Gentle',4.8,890,'A'),
+  makeSite('AU-GF-002581','Victorian Alps East','Australia','Oceania',-36.88,147.62,-36.96,147.74,480,8.2,12.9,6.6,39,34,164,144,18,'Moderate',3.2,1240,'C'),
+  makeSite('AU-GF-003102','Flinders Ranges South','Australia','Oceania',-31.42,138.72,-31.51,138.83,310,4.1,8.6,5.2,28,24,112,98,6,'Gentle',2.9,680,'C'),
+  makeSite('NO-GF-000088','Sognefjord Plateau','Norway','Europe',61.24,7.12,61.18,7.24,910,18.0,20.5,8.7,72,61,316,273,50,'Steep',5.8,1840,'A'),
+  makeSite('NO-GF-000312','Hardangervidda West','Norway','Europe',60.12,7.48,60.05,7.61,760,12.4,16.2,6.9,60,51,236,204,18,'Moderate',4.4,1620,'A'),
+  makeSite('NO-GF-000591','Jotunheimen North','Norway','Europe',61.58,8.32,61.50,8.48,820,15.6,19.4,8.2,65,55,285,246,50,'Steep',5.2,1780,'B'),
+  makeSite('NO-GF-000847','Telemark Highland','Norway','Europe',59.68,8.88,59.60,9.02,540,9.8,13.6,7.1,43,37,196,169,18,'Moderate',3.7,1120,'B'),
+  makeSite('AT-GF-000184','Ötztal Alps Central','Austria','Europe',46.92,10.88,46.84,11.02,820,15.6,19.1,8.5,65,55,282,243,50,'Steep',5.4,2180,'A'),
+  makeSite('AT-GF-000398','Salzburg Ranges','Austria','Europe',47.42,13.12,47.34,13.26,640,11.2,14.8,7.3,51,43,218,188,18,'Moderate',4.1,1560,'B'),
+  makeSite('CH-GF-000091','Swiss Alps Valais','Switzerland','Europe',46.08,7.62,46.00,7.78,890,16.9,20.2,9.1,71,60,312,269,50,'Steep',5.6,2340,'A'),
+  makeSite('CH-GF-000244','Graubünden East','Switzerland','Europe',46.72,9.54,46.64,9.68,710,13.2,17.4,8.0,56,48,248,214,50,'Steep',4.9,2120,'B'),
+  makeSite('ES-GF-000312','Pyrenees Central','Spain','Europe',42.65,0.38,42.57,0.52,560,9.1,13.8,6.3,44,38,196,169,18,'Moderate',3.5,1680,'B'),
+  makeSite('ES-GF-000487','Sierra Nevada North','Spain','Europe',37.12,-3.38,37.04,-3.24,480,7.4,11.6,5.8,38,33,168,145,18,'Moderate',3.1,2120,'C'),
+  makeSite('IN-GF-000412','Pir Panjal Range','India','Asia',33.21,76.12,33.13,76.26,640,14.2,18.4,7.8,51,44,248,215,18,'Moderate',4.2,2840,'B'),
+  makeSite('IN-GF-000889','Chambal Valley','India','Asia',24.88,76.54,24.80,76.68,420,7.8,12.1,5.4,34,29,168,146,18,'Gentle',3.1,420,'C'),
+  makeSite('IN-GF-001142','Western Ghats South','India','Asia',10.42,76.88,10.34,77.02,380,5.9,10.2,4.9,31,27,142,124,6,'Moderate',2.8,980,'C'),
+  makeSite('IN-GF-001588','Himalayan Foothills','India','Asia',31.42,77.52,31.34,77.66,720,14.8,18.8,8.1,57,49,264,229,18,'Steep',5.2,3240,'A'),
+  makeSite('IN-GF-001892','Aravalli Ridge','India','Asia',25.10,73.21,25.02,73.34,310,4.1,8.3,4.0,26,22,110,96,6,'Gentle',2.4,620,'D'),
+  makeSite('CN-GF-000088','Tibetan Plateau Edge','China','Asia',30.88,97.22,30.80,97.38,950,17.8,21.5,9.6,76,64,326,282,50,'Steep',6.1,4180,'A'),
+  makeSite('CN-GF-000312','Yunnan Gorges','China','Asia',26.30,99.15,26.22,99.29,780,13.9,18.0,8.2,62,53,256,221,50,'Steep',5.0,1840,'B'),
+  makeSite('CN-GF-000891','Sichuan Mountains','China','Asia',28.72,103.42,28.64,103.56,660,12.1,15.9,7.4,52,45,228,197,18,'Moderate',4.3,2560,'B'),
+  makeSite('CN-GF-001244','Guizhou Karst','China','Asia',26.12,106.88,26.04,107.02,440,6.8,11.2,5.6,36,31,158,137,18,'Moderate',2.9,1120,'C'),
+  makeSite('JP-GF-000061','Japanese Alps Central','Japan','Asia',36.28,137.62,36.20,137.76,700,11.8,16.5,7.0,56,48,222,192,18,'Steep',4.6,2480,'B'),
+  makeSite('JP-GF-000188','Tohoku Highlands','Japan','Asia',39.42,140.52,39.34,140.66,540,8.4,13.1,6.2,43,37,176,153,18,'Moderate',3.4,1580,'C'),
+  makeSite('PK-GF-000081','Karakoram Foothills','Pakistan','Asia',35.92,74.38,35.84,74.52,880,17.1,20.8,9.4,70,59,316,273,50,'Steep',5.8,3820,'A'),
+  makeSite('PK-GF-000244','Hindu Kush South','Pakistan','Asia',34.42,71.88,34.34,72.02,620,10.8,14.9,7.2,49,42,206,179,18,'Steep',4.0,2840,'B'),
+  makeSite('ID-GF-000251','Sumatra Highlands','Indonesia','Asia',2.38,98.22,2.30,98.36,360,4.8,9.6,4.5,30,26,122,107,6,'Moderate',2.6,1580,'D'),
+  makeSite('ID-GF-000612','Java Volcanic Belt','Indonesia','Asia',-7.42,110.52,-7.50,110.66,420,6.2,10.8,5.1,34,29,148,129,18,'Steep',2.9,1820,'C'),
+  makeSite('PH-GF-000144','Cordillera Central','Philippines','Asia',16.88,120.88,16.80,121.02,480,7.1,11.4,5.7,38,33,164,143,18,'Moderate',3.2,1640,'C'),
+  makeSite('NZ-GF-000121','Southern Alps Main','New Zealand','Oceania',-43.82,170.45,-43.90,170.59,790,14.8,18.9,8.5,62,53,276,239,50,'Steep',5.1,2120,'A'),
+  makeSite('NZ-GF-000384','Canterbury High','New Zealand','Oceania',-43.42,171.22,-43.50,171.36,560,9.8,14.2,7.0,45,38,202,175,18,'Moderate',3.8,1480,'B'),
+  makeSite('CL-GF-000071','Atacama Foothills','Chile','Americas',-23.50,-68.20,-23.58,-68.06,580,10.8,15.0,5.9,46,39,212,184,18,'Moderate',3.8,3640,'B'),
+  makeSite('CL-GF-000284','Patagonia Range North','Chile','Americas',-45.30,-72.10,-45.38,-71.96,730,13.5,17.8,8.2,58,50,252,218,50,'Moderate',4.4,820,'A'),
+  makeSite('CL-GF-000512','Patagonia Range South','Chile','Americas',-51.22,-72.88,-51.30,-72.74,680,12.1,16.4,7.8,54,46,236,204,18,'Gentle',4.1,640,'A'),
+  makeSite('PE-GF-000144','Andes Central Peru','Peru','Americas',-13.55,-72.88,-13.63,-72.74,650,11.5,16.0,6.9,52,44,228,197,18,'Moderate',4.0,3840,'B'),
+  makeSite('PE-GF-000312','Andes South Peru','Peru','Americas',-15.22,-71.42,-15.30,-71.28,580,10.2,14.5,6.4,46,40,202,175,18,'Steep',3.6,4120,'B'),
+  makeSite('BR-GF-000441','Serra da Mantiqueira','Brazil','Americas',-22.40,-44.80,-22.48,-44.66,390,5.9,10.2,4.8,32,27,148,129,6,'Moderate',2.7,1640,'D'),
+  makeSite('CO-GF-000188','Colombian Andes','Colombia','Americas',4.88,-75.22,4.80,-75.08,520,8.8,13.2,6.1,42,36,182,158,18,'Moderate',3.4,2480,'C'),
+  makeSite('US-GF-000338','Rocky Mtn Front Range','USA','Americas',40.55,-105.88,40.47,-105.74,610,10.2,14.8,6.2,48,41,208,180,18,'Moderate',3.7,2840,'B'),
+  makeSite('US-GF-000712','Sierra Nevada East','USA','Americas',37.72,-118.95,37.64,-118.81,840,16.4,19.8,8.9,67,57,296,256,50,'Moderate',5.1,2960,'A'),
+  makeSite('US-GF-001084','Cascades Washington','USA','Americas',48.22,-121.52,48.14,-121.38,660,12.2,16.1,7.5,52,44,232,201,18,'Moderate',4.2,1840,'B'),
+  makeSite('US-GF-001421','Great Basin Nevada','USA','Americas',39.42,-116.88,39.34,-116.74,420,6.1,10.6,5.3,34,29,148,129,18,'Gentle',2.8,1980,'D'),
+  makeSite('CA-GF-000244','British Columbia Coast','Canada','Americas',51.42,-124.88,51.34,-124.74,720,14.1,18.2,8.0,57,49,256,221,50,'Steep',4.8,1620,'A'),
+  makeSite('CA-GF-000488','Quebec Laurentians','Canada','Americas',47.88,-71.42,47.80,-71.28,380,5.4,9.8,4.6,31,27,134,117,6,'Gentle',2.6,420,'D'),
+  makeSite('ZA-GF-000152','Drakensberg East','South Africa','Africa',-29.60,29.40,-29.68,29.54,680,11.2,15.8,6.8,54,46,216,187,18,'Moderate',3.9,2480,'B'),
+  makeSite('ZA-GF-000384','Cape Fold Mountains','South Africa','Africa',-33.42,19.22,-33.50,19.36,440,6.8,11.0,5.4,35,30,156,136,18,'Moderate',3.0,1240,'C'),
+  makeSite('ET-GF-000031','Ethiopian Highlands','Ethiopia','Africa',9.15,38.88,9.07,39.02,450,6.7,11.5,5.1,36,31,158,138,18,'Gentle',2.9,2840,'C'),
+  makeSite('MA-GF-000188','Atlas Mountains','Morocco','Africa',31.88,-5.42,31.80,-5.28,540,9.2,13.4,6.3,43,37,188,163,18,'Moderate',3.6,2120,'C'),
+  makeSite('KE-GF-000112','Kenyan Highlands','Kenya','Africa',0.12,36.88,0.04,37.02,460,7.2,11.8,5.6,37,32,162,141,18,'Gentle',3.1,2440,'D'),
+  makeSite('TZ-GF-000091','Kipengere Range','Tanzania','Africa',-9.12,34.22,-9.20,34.36,420,6.2,10.8,5.0,34,29,148,129,18,'Moderate',2.8,1980,'C'),
+  makeSite('CM-GF-000144','Cameroon Highlands','Cameroon','Africa',6.22,10.42,6.14,10.56,360,4.6,9.2,4.4,29,25,116,102,6,'Gentle',2.4,1640,'E'),
+  makeSite('TR-GF-000312','Eastern Anatolia','Turkey','Asia',38.88,43.22,38.80,43.36,560,9.8,13.9,6.4,44,38,196,170,18,'Moderate',3.7,1920,'C'),
+  makeSite('TR-GF-000584','Taurus Mountains','Turkey','Asia',37.22,31.88,37.14,32.02,620,10.8,14.8,7.0,49,42,208,180,18,'Moderate',4.0,1680,'C'),
+  makeSite('GE-GF-000088','Greater Caucasus','Georgia','Asia',42.42,44.22,42.34,44.36,720,13.2,17.4,7.8,57,49,248,215,18,'Steep',4.6,2640,'B'),
+  makeSite('IR-GF-000244','Alborz Mountains','Iran','Asia',36.12,51.88,36.04,52.02,580,10.1,14.2,6.8,46,40,202,175,18,'Moderate',3.8,2480,'C'),
+  makeSite('MM-GF-000188','Shan Plateau Edge','Myanmar','Asia',21.42,97.88,21.34,98.02,480,7.4,11.8,5.8,38,33,164,143,18,'Moderate',3.2,1280,'D'),
+  makeSite('VN-GF-000144','Northern Vietnam Highlands','Vietnam','Asia',22.12,104.22,22.04,104.36,420,6.1,10.6,5.2,34,29,148,129,6,'Moderate',2.8,1480,'D'),
+  makeSite('PT-GF-000188','Serra da Estrela','Portugal','Europe',40.42,-7.22,40.34,-7.08,420,6.4,10.8,5.1,34,29,148,129,18,'Moderate',2.9,1240,'C'),
+  makeSite('FR-GF-000312','French Alps North','France','Europe',45.88,6.62,45.80,6.76,780,14.2,18.4,8.4,62,53,262,227,50,'Steep',5.0,2680,'A'),
+  makeSite('IT-GF-000244','Dolomites East','Italy','Europe',46.42,12.22,46.34,12.36,680,12.1,16.2,7.6,54,46,228,197,50,'Steep',4.5,2340,'B'),
+  makeSite('SI-GF-000112','Julian Alps','Slovenia','Europe',46.42,13.82,46.34,13.96,540,9.2,13.4,6.5,43,37,188,163,18,'Moderate',3.6,1880,'B'),
+  makeSite('MK-GF-000088','Macedonian Ranges','North Macedonia','Europe',41.42,20.88,41.34,21.02,420,6.8,11.0,5.4,34,29,156,136,18,'Moderate',2.9,1480,'C'),
+  makeSite('AL-GF-000088','Albanian Alps','Albania','Europe',42.22,19.88,42.14,20.02,480,7.6,12.0,5.7,38,33,168,146,18,'Moderate',3.2,1640,'C'),
+  makeSite('ME-GF-000088','Montenegrin Highlands','Montenegro','Europe',42.88,19.22,42.80,19.36,520,8.4,12.8,6.0,42,36,178,155,18,'Steep',3.5,1840,'C'),
+  makeSite('BA-GF-000112','Dinaric Alps Bosnia','Bosnia','Europe',43.72,17.22,43.64,17.36,460,7.2,11.6,5.6,37,32,160,139,18,'Moderate',3.1,1560,'C'),
+  makeSite('MN-GF-000088','Mongolian Altai','Mongolia','Asia',48.42,90.88,48.34,91.02,560,9.8,13.8,6.6,44,38,196,170,168,'Moderate',3.8,2480,'C'),
+  makeSite('KZ-GF-000144','Tian Shan North','Kazakhstan','Asia',43.22,79.42,43.14,79.56,620,11.2,15.2,7.2,49,42,212,184,168,'Moderate',4.1,2840,'B'),
+  makeSite('KG-GF-000112','Kyrgyz Range','Kyrgyzstan','Asia',42.42,74.88,42.34,75.02,680,12.4,16.4,7.6,54,46,236,204,168,'Steep',4.6,3240,'B'),
+  makeSite('TJ-GF-000144','Pamir Foothills','Tajikistan','Asia',38.42,72.22,38.34,72.36,780,14.2,18.2,8.4,62,53,258,224,168,'Steep',5.3,3640,'A'),
+  makeSite('AF-GF-000112','Hindu Kush Central','Afghanistan','Asia',35.42,69.88,35.34,70.02,680,12.1,16.2,7.8,54,46,228,198,50,'Steep',4.5,2980,'C'),
+  makeSite('NP-GF-000144','Nepal Himalayas','Nepal','Asia',28.42,84.22,28.34,84.36,880,17.2,21.0,9.2,70,60,316,274,50,'Steep',6.0,3840,'A'),
+  makeSite('BT-GF-000088','Bhutan Highlands','Bhutan','Asia',27.42,90.22,27.34,90.36,760,13.8,17.8,8.2,60,51,252,218,50,'Steep',5.2,3240,'B'),
+  makeSite('MX-GF-000244','Sierra Madre Occidental','Mexico','Americas',23.42,-105.22,23.34,-105.08,540,9.2,13.4,6.3,43,37,188,163,18,'Moderate',3.5,1840,'C'),
+  makeSite('GT-GF-000112','Guatemala Highlands','Guatemala','Americas',15.22,-91.42,15.14,-91.28,480,7.4,11.6,5.7,38,33,164,143,18,'Moderate',3.2,2480,'C'),
+  makeSite('VE-GF-000144','Venezuelan Andes','Venezuela','Americas',8.42,-71.22,8.34,-71.08,560,9.8,14.0,6.6,44,38,196,170,18,'Moderate',3.7,2640,'C'),
+  makeSite('EC-GF-000144','Ecuadorian Andes','Ecuador','Americas',-1.42,-78.22,-1.50,-78.08,620,10.8,15.0,7.0,49,42,210,182,18,'Moderate',3.9,3480,'B'),
+  makeSite('BO-GF-000144','Bolivian Altiplano Edge','Bolivia','Americas',-16.42,-67.88,-16.50,-67.74,640,11.2,15.4,7.2,51,43,218,189,168,'Gentle',4.2,3840,'B'),
+  makeSite('AR-GF-000188','Patagonian Andes','Argentina','Americas',-38.42,-71.22,-38.50,-71.08,680,12.4,16.4,7.8,54,46,236,204,50,'Moderate',4.4,1480,'B'),
+  makeSite('UY-GF-000088','Uruguay Highland','Uruguay','Americas',-31.42,-56.22,-31.50,-56.08,180,2.1,5.2,3.2,16,14,64,56,6,'Gentle',1.8,280,'E'),
+  makeSite('AU-GF-003844','Queensland Granite Belt','Australia','Oceania',-28.42,151.88,-28.50,152.02,380,5.2,9.8,4.8,31,27,136,118,6,'Gentle',2.7,840,'D'),
+  makeSite('AU-GF-004122','WA Darling Range','Australia','Oceania',-31.88,116.22,-31.96,116.36,220,2.8,6.4,3.8,20,17,82,72,6,'Gentle',1.9,420,'E'),
+  makeSite('AU-GF-004488','SA Fleurieu Peninsula','Australia','Oceania',-35.42,138.72,-35.50,138.86,180,2.1,5.2,3.2,16,14,62,55,6,'Gentle',1.7,320,'E'),
+  makeSite('PG-GF-000144','PNG Highlands','Papua New Guinea','Oceania',-6.42,144.22,-6.50,144.36,560,9.8,13.8,6.6,44,38,196,170,18,'Steep',3.9,2480,'C'),
+  makeSite('FJ-GF-000088','Fiji Highlands','Fiji','Oceania',-17.42,178.22,-17.50,178.36,320,4.2,8.4,4.2,27,23,108,95,6,'Moderate',2.5,880,'D'),
+  makeSite('PF-GF-000088','Tahiti Central','French Polynesia','Oceania',-17.62,-149.42,-17.70,-149.28,380,4.8,9.2,4.6,31,27,130,114,6,'Steep',3.0,1240,'D'),
+  makeSite('MY-GF-000144','Cameron Highlands','Malaysia','Asia',4.42,101.42,4.34,101.56,420,6.2,10.6,5.1,34,29,148,129,18,'Moderate',2.9,1640,'D'),
+  makeSite('LK-GF-000088','Sri Lanka Hill Country','Sri Lanka','Asia',6.88,80.72,6.80,80.86,360,4.6,9.2,4.4,29,25,116,102,18,'Moderate',2.6,1280,'D'),
+  makeSite('TW-GF-000112','Taiwan Central Range','Taiwan','Asia',23.42,121.22,23.34,121.36,640,11.2,15.2,7.2,51,43,218,189,18,'Steep',4.4,2480,'B'),
+  makeSite('KR-GF-000144','Korean Alps','South Korea','Asia',37.42,128.22,37.34,128.36,480,7.8,12.2,6.0,38,33,172,149,18,'Moderate',3.4,1440,'C'),
+  makeSite('IS-GF-000088','Iceland Highland','Iceland','Europe',64.42,-18.22,64.34,-18.08,380,5.8,10.2,5.0,31,27,138,120,18,'Gentle',3.0,480,'C'),
+  makeSite('GL-GF-000088','Greenland Edge','Greenland','Americas',68.42,-51.22,68.34,-51.08,420,6.4,10.8,5.2,34,29,148,129,18,'Gentle',3.2,240,'D'),
+  makeSite('RU-GF-000244','Ural Mountains South','Russia','Asia',54.42,59.22,54.34,59.36,360,5.2,9.4,4.6,29,25,122,107,168,'Gentle',2.7,1040,'D'),
+  makeSite('RU-GF-000488','Altai Republic','Russia','Asia',50.42,87.22,50.34,87.36,580,10.2,14.2,6.8,46,40,202,175,168,'Moderate',3.8,2040,'C'),
+  makeSite('UA-GF-000144','Carpathian Highlands','Ukraine','Europe',48.22,24.42,48.14,24.56,320,4.4,8.6,4.4,27,23,112,98,18,'Gentle',2.5,1040,'D'),
+  makeSite('SK-GF-000112','Tatra Mountains','Slovakia','Europe',49.22,19.88,49.14,20.02,480,7.8,12.2,5.9,38,33,172,149,18,'Steep',3.5,1840,'B'),
+  makeSite('PL-GF-000112','Sudeten Mountains','Poland','Europe',50.62,16.42,50.54,16.56,320,4.4,8.6,4.4,27,23,112,98,18,'Gentle',2.5,840,'D'),
+  makeSite('RO-GF-000144','Transylvanian Alps','Romania','Europe',45.42,24.42,45.34,24.56,480,7.8,12.2,5.9,38,33,172,149,18,'Moderate',3.4,1440,'C'),
+  makeSite('BG-GF-000112','Rila Mountains','Bulgaria','Europe',42.12,23.42,42.04,23.56,560,9.2,13.4,6.4,44,38,188,163,18,'Moderate',3.7,2180,'B'),
+  makeSite('GR-GF-000144','Pindus Mountains','Greece','Europe',39.88,21.42,39.80,21.56,480,7.6,12.0,5.8,38,33,168,146,18,'Moderate',3.3,1840,'C'),
+  makeSite('HR-GF-000088','Dinaric Croatia','Croatia','Europe',44.42,15.88,44.34,16.02,420,6.6,10.8,5.2,34,29,150,130,18,'Moderate',3.0,1240,'C'),
+  makeSite('SE-GF-000188','Scandinavian Range','Sweden','Europe',62.42,13.22,62.34,13.36,480,8.2,12.4,6.0,38,33,176,153,168,'Moderate',3.4,1080,'B'),
+  makeSite('FI-GF-000144','Lapland Hills','Finland','Europe',68.42,26.22,68.34,26.36,180,2.4,5.8,3.4,16,14,66,58,168,'Gentle',1.8,380,'E'),
+  makeSite('EE-GF-000088','Estonian Hills','Estonia','Europe',58.42,25.22,58.34,25.36,60,0.8,2.4,2.1,8,7,28,25,6,'Flat',1.2,120,'E'),
+  makeSite('HU-GF-000088','Mátra Mountains','Hungary','Europe',47.88,19.88,47.80,20.02,220,2.8,6.2,3.6,19,17,72,63,6,'Gentle',2.0,680,'E'),
+  makeSite('CZ-GF-000112','Bohemian Switzerland','Czech Republic','Europe',50.88,14.22,50.80,14.36,280,3.8,7.8,4.0,24,21,98,86,18,'Gentle',2.3,680,'D'),
+  makeSite('AU-GF-005122','NSW Blue Mountains South','Australia','Oceania',-34.12,150.22,-34.20,150.36,440,7.2,11.6,5.6,36,31,162,141,18,'Moderate',3.2,860,'C'),
+  makeSite('AU-GF-005488','Vic High Country','Australia','Oceania',-37.22,146.88,-37.30,147.02,420,6.8,11.0,5.4,34,29,154,134,18,'Moderate',3.1,1180,'C'),
+  makeSite('AU-GF-005844','QLD Atherton Tablelands','Australia','Oceania',-17.42,145.52,-17.50,145.66,380,5.4,9.8,4.8,31,27,136,119,6,'Moderate',2.7,780,'D'),
+  makeSite('AU-GF-006122','TAS Southwest','Australia','Oceania',-42.88,146.12,-42.96,146.26,540,9.2,13.4,6.4,43,37,188,163,18,'Moderate',3.7,880,'B'),
+];
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+const ORIGINAL_DEMO = [...DEMO_SITES];
+let allSites = [...DEMO_SITES];
+let filteredSites = [...allSites];
+let selectedSite = null;
+let sortKey = 'energy';
+let regionFilter = 'all';
+let storageFilter = 'all';
+let costFilter = 'all';
+let showPairLines = true;
+let markers = {};
+let lowerMarkers = {};
+let pairLines = [];
+let viewMode = '2d';
+
+let terrainRenderer=null,terrainScene=null,terrainCamera=null,terrainControls=null;
+let terrainMesh=null,terrainAnimId=null,demSurfaceReady=false;
+let terrainMarkerGroup=null,terrainMarkerMap={},terrainRaycaster=null;
+let terrainMouse=null,terrainClickHandler=null,terrainMeta=null;
+let terrainInfoBase='Load a DEM GeoTIFF to enable 3D terrain mode.';
+let terrainMarkerMode='selected';
+
+// ── CSV PARSING ──────────────────────────────────────────────────────────────
+function normalizeKey(v){ return (v||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); }
+function parseNumber(v){
+  if(v===null||v===undefined) return NaN;
+  if(typeof v==='number') return v;
+  const c=String(v).replace(/,/g,'').replace(/[^0-9.+\-]/g,'');
+  return c?Number(c):NaN;
+}
+function parseCsv(text){
+  const rows=[];let row=[],cell='',inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(ch==='"'){if(inQ&&text[i+1]==='"'){cell+='"';i++;}else inQ=!inQ;continue;}
+    if(ch===','&&!inQ){row.push(cell.trim());cell='';continue;}
+    if((ch==='\n'||ch==='\r')&&!inQ){
+      if(ch==='\r'&&text[i+1]==='\n')i++;
+      row.push(cell.trim());if(row.some(c=>c!==''))rows.push(row);row=[];cell='';continue;
+    }
+    cell+=ch;
+  }
+  if(cell.length||row.length){row.push(cell.trim());if(row.some(c=>c!==''))rows.push(row);}
+  return rows;
+}
+function inferRegion(lat,lon){
+  if(lat>36&&lon>=-10&&lon<=60)return'Europe';
+  if(lat>=-35&&lon>=-20&&lon<=55)return'Africa';
+  if(lon>=55&&lon<=180&&lat>=-10)return'Asia';
+  if(lon>=110&&lon<=180&&lat<-10)return'Oceania';
+  if(lon<-20)return'Americas';
+  return'Asia';
+}
+function parsePHESCsv(text){
+  const rows=parseCsv(text);
+  if(rows.length<2)throw new Error('No data rows found.');
+  const headers=rows[0];
+  const hmap={};
+  headers.forEach((h,i)=>{hmap[normalizeKey(h)]=i;});
+  const get=(candidates)=>{
+    for(const c of candidates){const k=normalizeKey(c);if(k in hmap)return hmap[k];}
+    return -1;
+  };
+  const col={
+    id:       get(['Pair Identifier','Identifier','id','Site ID']),
+    name:     get(['Name','Site name','Pair Identifier','Identifier']),
+    ulat:     get(['Upper latitude','Latitude','lat']),
+    ulon:     get(['Upper longitude','Longitude','lon']),
+    llat:     get(['Lower latitude','Lower lat']),
+    llon:     get(['Lower longitude','Lower lon']),
+    head:     get(['Head (m)','Head height (m)','Head']),
+    energy:   get(['Energy (GWh)','Energy']),
+    volume:   get(['Volume (GL)','Water volume (GL)','Volume']),
+    sep:      get(['Pourpoint separation (km)','Separation (km)','Distance (km)','Distance']),
+    udamh:    get(['Upper max dam height (m)','Upper dam height (m)']),
+    ldamh:    get(['Lower max dam height (m)','Lower dam height (m)']),
+    uarea:    get(['Upper area estimate (ha)','Upper reservoir area (ha)']),
+    larea:    get(['Lower area estimate (ha)','Lower reservoir area (ha)']),
+    storage:  get(['Storage time (h)','Storage time','Time (h)']),
+    slope:    get(['Slope','Slope category']),
+    wratio:   get(['Water-rock ratio','Water rock ratio','W/R ratio']),
+    alt:      get(['Altitude (m)','Elevation (m)','Altitude']),
+    country:  get(['Country']),
+    region:   get(['Region']),
+    costClass:get(['Cost class','Cost Class','Cost category']),
+  };
+  const sites=[];
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];
+    const g=(c,def='')=>c>=0?(r[c]||def):def;
+    const gn=(c)=>parseNumber(g(c,0));
+    const ulat=gn(col.ulat),ulon=gn(col.ulon),energy=gn(col.energy);
+    if(!Number.isFinite(ulat)||!Number.isFinite(ulon)||!Number.isFinite(energy))continue;
+    const llat=gn(col.llat)||ulat+0.08;
+    const llon=gn(col.llon)||ulon+0.14;
+    const storage=gn(col.storage)||18;
+    const power=energy/storage;
+    sites.push({
+      id:g(col.id,`SITE-${i}`),
+      name:g(col.name,`SITE-${i}`),
+      country:g(col.country,'Unknown'),
+      region:g(col.region)||inferRegion(ulat,ulon),
+      ulat,ulon,llat,llon,
+      head:gn(col.head)||0,energy,volume:gn(col.volume)||0,
+      sep:gn(col.sep)||0,
+      udamh:gn(col.udamh)||0,ldamh:gn(col.ldamh)||0,
+      uarea:gn(col.uarea)||0,larea:gn(col.larea)||0,
+      storage,slope:g(col.slope,'—'),wratio:gn(col.wratio)||0,
+      alt:gn(col.alt)||0,
+      costClass:g(col.costClass,'—'),
+      power,lat:ulat,lon:ulon,
+    });
+  }
+  if(!sites.length)throw new Error('No valid rows. Need latitude, longitude, and energy columns.');
+  return sites;
+}
+
+function setDataStatus(msg,err=false){
+  const el=document.getElementById('data-status');el.textContent=msg;el.classList.toggle('error',err);
+}
+function setDemStatus(msg,err=false){
+  const el=document.getElementById('dem-status');el.textContent=msg;el.classList.toggle('error',err);
+}
+function updateDataBadge(isDemo){
+  document.getElementById('badge-source').textContent=isDemo?'● DEMO DATA':'● CSV DATA';
+}
+function refreshFilterRanges(){
+  const maxE=Math.max(...allSites.map(s=>s.energy),20);
+  const maxH=Math.max(...allSites.map(s=>s.head),1000);
+  const maxSep=Math.max(...allSites.map(s=>s.sep),20);
+  const eS=document.getElementById('f-energy');
+  const hS=document.getElementById('f-head');
+  const sS=document.getElementById('f-sep');
+  eS.max=String(Math.ceil(maxE*2)/2);
+  hS.max=String(Math.ceil(maxH/25)*25);
+  sS.max=String(Math.ceil(maxSep*2)/2);
+  document.getElementById('lbl-energy').textContent=`${eS.value} GWh`;
+  document.getElementById('lbl-head').textContent=`${hS.value} m`;
+  document.getElementById('lbl-sep').textContent=Number(sS.value)>=Number(sS.max)?'Any km':`${sS.value} km`;
+}
+function loadSites(sites,label,isDemo=false){
+  allSites=[...sites];filteredSites=[...allSites];
+  selectedSite=null;closeDetail();
+  refreshFilterRanges();applyFilters();fitAll();
+  updateDataBadge(isDemo);
+  setDataStatus(`Loaded ${allSites.length} sites from ${label}.`);
+}
+
+document.getElementById('csv-input').addEventListener('change',async(e)=>{
+  const[file]=e.target.files||[];if(!file)return;
+  try{const text=await file.text();const sites=parsePHESCsv(text);loadSites(sites,file.name,false);}
+  catch(err){setDataStatus(`Failed: ${err.message}`,true);}
+  finally{e.target.value='';}
+});
+document.getElementById('btn-use-demo').addEventListener('click',()=>{
+  loadSites(ORIGINAL_DEMO,'built-in demo data',true);
+});
+
+// ── MAP ──────────────────────────────────────────────────────────────────────
+const map=L.map('map',{center:[20,20],zoom:2,zoomControl:false,attributionControl:false});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
+L.control.attribution({prefix:false}).addAttribution('© OpenStreetMap · ANU RE100').addTo(map);
+
+// ── 3D (unchanged from original, trimmed for brevity) ───────────────────────
+function updateViewModeUI(){
+  const wrapEl=document.querySelector('.map-wrap');
+  const mapEl=document.getElementById('map');
+  const terrainEl=document.getElementById('terrain-3d');
+  const legendEl=document.querySelector('.map-legend');
+  const infoEl=document.getElementById('terrain-info');
+  const modeBtn=document.getElementById('btn-mode');
+  const is3d=viewMode==='3d',isDual=viewMode==='dual';
+  const show2d=viewMode==='2d'||isDual,show3d=is3d||isDual;
+  wrapEl.classList.toggle('dual-mode',isDual);
+  mapEl.style.display=show2d?'block':'none';
+  terrainEl.style.display=show3d?'block':'none';
+  legendEl.style.display=show2d?'block':'none';
+  infoEl.style.display=show3d?'block':'none';
+  if(viewMode==='2d')modeBtn.textContent='3D';
+  if(viewMode==='3d')modeBtn.textContent='BOTH';
+  if(viewMode==='dual')modeBtn.textContent='2D';
+  document.querySelectorAll('.ctrl-2d').forEach(b=>b.style.display=is3d?'none':'flex');
+}
+function setViewMode(mode){
+  if((mode==='3d'||mode==='dual')&&!demSurfaceReady){setDemStatus('Load DEM first.',true);return;}
+  viewMode=mode;updateViewModeUI();
+  if(viewMode==='2d'||viewMode==='dual')map.invalidateSize();
+  if(viewMode==='3d'||viewMode==='dual')resizeTerrainRenderer();
+}
+function demRampColor(t){
+  const c1=new THREE.Color('#0d1b2a'),c2=new THREE.Color('#1b4332'),c3=new THREE.Color('#a3b18a'),c4=new THREE.Color('#e9d8a6');
+  if(t<=0.33)return c1.clone().lerp(c2,t/0.33);
+  if(t<=0.66)return c2.clone().lerp(c3,(t-0.33)/0.33);
+  return c3.clone().lerp(c4,(t-0.66)/0.34);
+}
+function destroyTerrainScene(){
+  if(terrainAnimId){cancelAnimationFrame(terrainAnimId);terrainAnimId=null;}
+  if(terrainRenderer&&terrainClickHandler){terrainRenderer.domElement.removeEventListener('pointerdown',terrainClickHandler);terrainClickHandler=null;}
+  if(terrainControls){terrainControls.dispose();terrainControls=null;}
+  if(terrainMarkerGroup){terrainMarkerGroup.children.forEach(c=>{if(c.geometry)c.geometry.dispose();if(c.material)c.material.dispose();});terrainMarkerGroup=null;terrainMarkerMap={};}
+  if(terrainMesh){terrainMesh.geometry.dispose();terrainMesh.material.dispose();terrainMesh=null;}
+  if(terrainScene){terrainScene.clear();terrainScene=null;}
+  if(terrainRenderer){terrainRenderer.dispose();if(terrainRenderer.domElement?.parentNode)terrainRenderer.domElement.parentNode.removeChild(terrainRenderer.domElement);terrainRenderer=null;}
+  terrainCamera=null;terrainRaycaster=null;terrainMouse=null;terrainMeta=null;
+}
+function resizeTerrainRenderer(){if(!terrainRenderer||!terrainCamera)return;const c=document.getElementById('terrain-3d');const w=Math.max(c.clientWidth,1),h=Math.max(c.clientHeight,1);terrainRenderer.setSize(w,h,false);terrainCamera.aspect=w/h;terrainCamera.updateProjectionMatrix();}
+function startTerrainLoop(){const tick=()=>{terrainAnimId=requestAnimationFrame(tick);if(terrainControls)terrainControls.update();if((viewMode==='3d'||viewMode==='dual')&&terrainRenderer&&terrainScene&&terrainCamera)terrainRenderer.render(terrainScene,terrainCamera);};tick();}
+function setTerrainInfo(t){document.getElementById('terrain-info').textContent=t;}
+function isLikelyGeographicBBox(b){if(!b||b.length!==4||!b.every(Number.isFinite))return false;return Math.abs(b[0])<=180&&Math.abs(b[2])<=180&&Math.abs(b[1])<=90&&Math.abs(b[3])<=90;}
+function terrainMarkerRadius(s){return 0.36+Math.min(s.energy,20)*0.024;}
+function terrainSiteToWorld(site){
+  if(!terrainMeta||!terrainMeta.bbox||terrainMeta.bbox.length!==4)return null;
+  const[minX,minY,maxX,maxY]=terrainMeta.bbox;
+  if(!Number.isFinite(minX)||maxX===minX||maxY===minY)return null;
+  const u=(site.lon-minX)/(maxX-minX),v=(site.lat-minY)/(maxY-minY);
+  if(u<0||u>1||v<0||v>1)return null;
+  const colF=u*(terrainMeta.cols-1),rowF=(1-v)*(terrainMeta.rows-1);
+  const nc=Math.max(0,Math.min(terrainMeta.cols-1,Math.round(colF)));
+  const nr=Math.max(0,Math.min(terrainMeta.rows-1,Math.round(rowF)));
+  const idx=nr*terrainMeta.cols+nc;
+  const elev=Number.isFinite(terrainMeta.values[idx])?terrainMeta.values[idx]:terrainMeta.min;
+  const norm=(elev-terrainMeta.min)/terrainMeta.range;
+  return{x:(u-0.5)*terrainMeta.terrainWidth,y:norm*terrainMeta.verticalScale,z:(0.5-v)*terrainMeta.terrainHeight,elevation:elev};
+}
+function refreshTerrainInfoWithMarkers(mc,oc){
+  const s=mc>0?` | 3D markers: ${mc}${oc?` (${oc} outside DEM)`:''}`:' | 3D markers: 0';
+  const modeSuffix=terrainMarkerMode==='selected'?' | mode: selected':'';
+  setTerrainInfo(`${terrainInfoBase}${s}${modeSuffix}`);
+}
+function update3DSiteSelection(){
+  if(!terrainMarkerGroup)return;
+  Object.entries(terrainMarkerMap).forEach(([id,mesh])=>{
+    const isSel=selectedSite&&selectedSite.id===id;
+    mesh.scale.setScalar(isSel?1.45:1);
+    mesh.material.emissive.setHex(isSel?0x2fbb8d:0x000000);
+  });
+}
+function renderTerrainSiteMarkers(){
+  if(!terrainScene||!terrainMeta)return;
+  if(terrainMarkerGroup){terrainMarkerGroup.children.forEach(c=>{if(c.geometry)c.geometry.dispose();if(c.material)c.material.dispose();});terrainScene.remove(terrainMarkerGroup);}
+  terrainMarkerGroup=new THREE.Group();terrainMarkerMap={};
+  const selectedVisible=selectedSite&&filteredSites.some(s=>s.id===selectedSite.id);
+  const sitesFor3D=terrainMarkerMode==='selected'?(selectedVisible?[selectedSite]:[]):filteredSites;
+  let mc=0,oc=0;
+  sitesFor3D.forEach(site=>{
+    const p=terrainSiteToWorld(site);if(!p){oc++;return;}
+    const r=terrainMarkerRadius(site);
+    const sphere=new THREE.Mesh(new THREE.SphereGeometry(r,16,14),new THREE.MeshStandardMaterial({color:markerColor(site.energy),emissive:0x000000,roughness:0.35,metalness:0.16}));
+    sphere.position.set(p.x,p.y+r+0.16,p.z);sphere.userData.siteId=site.id;
+    terrainMarkerGroup.add(sphere);terrainMarkerMap[site.id]=sphere;mc++;
+  });
+  terrainScene.add(terrainMarkerGroup);refreshTerrainInfoWithMarkers(mc,oc);update3DSiteSelection();
+}
+function bindTerrainPickHandler(){
+  if(!terrainRenderer)return;
+  terrainRaycaster=new THREE.Raycaster();terrainMouse=new THREE.Vector2();
+  terrainClickHandler=(event)=>{
+    if(!terrainMarkerGroup||!terrainCamera)return;
+    const rect=terrainRenderer.domElement.getBoundingClientRect();
+    terrainMouse.x=((event.clientX-rect.left)/rect.width)*2-1;
+    terrainMouse.y=-((event.clientY-rect.top)/rect.height)*2+1;
+    terrainRaycaster.setFromCamera(terrainMouse,terrainCamera);
+    const hits=terrainRaycaster.intersectObjects(terrainMarkerGroup.children,false);
+    if(!hits.length)return;
+    const id=hits[0].object?.userData?.siteId;
+    if(!id)return;
+    const site=allSites.find(s=>s.id===id);if(site)selectSite(site);
+  };
+  terrainRenderer.domElement.addEventListener('pointerdown',terrainClickHandler);
+}
+function buildTerrainFromDemData(dem,sourceName){
+  destroyTerrainScene();
+  const container=document.getElementById('terrain-3d');
+  const{cols,rows,values,min,max,bbox}=dem;
+  const range=Math.max(max-min,1e-6);
+  terrainRenderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
+  terrainRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  container.appendChild(terrainRenderer.domElement);
+  terrainScene=new THREE.Scene();terrainScene.background=new THREE.Color('#0b0f0e');
+  terrainCamera=new THREE.PerspectiveCamera(50,1,0.1,2000);
+  const terrainWidth=120,terrainHeight=terrainWidth*(rows/cols),verticalScale=28;
+  terrainMeta={cols,rows,values,min,max,range,bbox,terrainWidth,terrainHeight,verticalScale};
+  const geometry=new THREE.PlaneGeometry(terrainWidth,terrainHeight,cols-1,rows-1);
+  const positions=geometry.attributes.position;
+  const colors=new Float32Array(cols*rows*3);
+  for(let i=0;i<values.length;i++){
+    const elev=Number.isFinite(values[i])?values[i]:min;
+    const t=(elev-min)/range;positions.setZ(i,t*verticalScale);
+    const color=demRampColor(t);colors[i*3]=color.r;colors[i*3+1]=color.g;colors[i*3+2]=color.b;
+  }
+  geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));geometry.computeVertexNormals();
+  const material=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.88,metalness:0.06,side:THREE.DoubleSide});
+  terrainMesh=new THREE.Mesh(geometry,material);terrainMesh.rotation.x=-Math.PI/2;terrainScene.add(terrainMesh);
+  const wire=new THREE.LineSegments(new THREE.WireframeGeometry(geometry),new THREE.LineBasicMaterial({color:0x1e2e29,transparent:true,opacity:0.25}));
+  wire.rotation.x=-Math.PI/2;terrainScene.add(wire);
+  terrainScene.add(new THREE.AmbientLight(0x93b8a8,0.58));
+  const kl=new THREE.DirectionalLight(0xffffff,0.95);kl.position.set(40,55,20);terrainScene.add(kl);
+  const fl=new THREE.DirectionalLight(0x7ddfb4,0.35);fl.position.set(-35,25,-30);terrainScene.add(fl);
+  const diag=Math.sqrt(terrainWidth*terrainWidth+terrainHeight*terrainHeight);
+  terrainCamera.position.set(0,diag*0.46,diag*0.78);
+  terrainControls=new THREE.OrbitControls(terrainCamera,terrainRenderer.domElement);
+  terrainControls.enableDamping=true;terrainControls.dampingFactor=0.09;
+  terrainControls.maxPolarAngle=Math.PI/2.03;terrainControls.target.set(0,verticalScale*0.33,0);
+  terrainControls.minDistance=16;terrainControls.maxDistance=diag*3.2;
+  resizeTerrainRenderer();bindTerrainPickHandler();renderTerrainSiteMarkers();startTerrainLoop();
+  let bboxText='bbox unavailable';
+  if(bbox&&bbox.length===4&&bbox.every(Number.isFinite))bboxText=`${bbox[0].toFixed(2)},${bbox[1].toFixed(2)} to ${bbox[2].toFixed(2)},${bbox[3].toFixed(2)}`;
+  terrainInfoBase=`DEM: ${sourceName} | ${cols}×${rows} | ${min.toFixed(0)}-${max.toFixed(0)} m | ${bboxText}`;
+  refreshTerrainInfoWithMarkers(Object.keys(terrainMarkerMap).length,0);
+  demSurfaceReady=true;document.getElementById('btn-mode').disabled=false;
+  setDemStatus(isLikelyGeographicBBox(bbox)?`Loaded ${sourceName} (${cols}×${rows}). PHES markers aligned.`:`Loaded ${sourceName} — bbox not lon/lat, alignment may be off.`,!isLikelyGeographicBBox(bbox));
+  setViewMode('3d');
+}
+async function parseDemGeoTiff(file){
+  if(!window.GeoTIFF)throw new Error('GeoTIFF parser not available.');
+  const ab=await file.arrayBuffer();
+  const tiff=await GeoTIFF.fromArrayBuffer(ab);const image=await tiff.getImage();
+  const width=image.getWidth(),height=image.getHeight();
+  const sampleStep=Math.max(1,Math.ceil(Math.max(width,height)/240));
+  const cols=Math.max(2,Math.floor(width/sampleStep)),rows=Math.max(2,Math.floor(height/sampleStep));
+  const raster=await image.readRasters({samples:[0],interleave:true,width:cols,height:rows,resampleMethod:'bilinear'});
+  const nodataRaw=image.getGDALNoData();const nodata=nodataRaw===null||nodataRaw===undefined?null:Number(nodataRaw);
+  const values=new Float32Array(raster.length);let min=Infinity,max=-Infinity;
+  for(let i=0;i<raster.length;i++){
+    const v=Number(raster[i]);const isND=nodata!==null&&Number.isFinite(nodata)&&v===nodata;
+    if(!Number.isFinite(v)||isND){values[i]=NaN;continue;}
+    values[i]=v;if(v<min)min=v;if(v>max)max=v;
+  }
+  if(!Number.isFinite(min)||!Number.isFinite(max))throw new Error('DEM has no valid elevation cells.');
+  return{cols,rows,values,min,max,bbox:image.getBoundingBox?image.getBoundingBox():null};
+}
+document.getElementById('btn-mode').addEventListener('click',()=>{
+  if(viewMode==='2d')setViewMode('3d');else if(viewMode==='3d')setViewMode('dual');else setViewMode('2d');
+});
+document.getElementById('dem-input').addEventListener('change',async(e)=>{
+  const[file]=e.target.files||[];if(!file)return;
+  try{setDemStatus(`Loading ${file.name}...`);const dem=await parseDemGeoTiff(file);buildTerrainFromDemData(dem,file.name);}
+  catch(err){setDemStatus(`Failed: ${err.message}`,true);}finally{e.target.value='';}
+});
+document.getElementById('btn-clear-dem').addEventListener('click',()=>{
+  destroyTerrainScene();demSurfaceReady=false;document.getElementById('btn-mode').disabled=true;
+  terrainInfoBase='Load a DEM GeoTIFF to enable 3D terrain mode.';
+  setTerrainInfo('Load a DEM GeoTIFF to enable 3D terrain mode.');setDemStatus('3D DEM mode inactive.');setViewMode('2d');
+});
+window.addEventListener('resize',()=>{if(viewMode==='2d')map.invalidateSize();resizeTerrainRenderer();});
+updateViewModeUI();
+
+// ── MARKERS & PAIR LINES ─────────────────────────────────────────────────────
+function markerColor(e){return e>=10?'#00e5a0':e>=3?'#f5a623':'#e05252';}
+function markerSize(e){return Math.max(8,Math.min(20,6+e*0.7));}
+
+function clearPairLines(){pairLines.forEach(l=>map.removeLayer(l));pairLines=[];}
+
+function drawPairLine(site){
+  if(!showPairLines||!Number.isFinite(site.llat)||!Number.isFinite(site.llon))return;
+  const line=L.polyline([[site.ulat,site.ulon],[site.llat,site.llon]],{
+    color:markerColor(site.energy),weight:1.5,dashArray:'5 4',opacity:0.5
+  }).addTo(map);
+  pairLines.push(line);
+}
+
+function togglePairLines(){
+  showPairLines=!showPairLines;
+  const btn=document.getElementById('btn-pairs');
+  btn.style.color=showPairLines?'var(--accent)':'var(--text3)';
+  if(showPairLines){filteredSites.forEach(s=>drawPairLine(s));}
+  else{clearPairLines();}
+}
+
+function createMarker(site){
+  const c=markerColor(site.energy),sz=markerSize(site.energy);
+  const icon=L.divIcon({
+    className:'',
+    html:`<div class="phes-marker" style="width:${sz}px;height:${sz}px;background:${c};box-shadow:0 0 0 3px ${c}33;"></div>`,
+    iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],
+  });
+  const m=L.marker([site.ulat,site.ulon],{icon}).addTo(map).on('click',()=>selectSite(site,'2d-marker'));
+  m.bindTooltip(`<div style="font-family:'DM Mono',monospace;font-size:11px;background:#111815;border:1px solid #1e2e29;color:#d4e8e1;border-radius:6px;padding:6px 10px">
+    <strong style="color:#00e5a0">${site.id}</strong><br>${site.name}<br>
+    <span style="color:#7fa898">${site.energy} GWh · ${site.head}m · ${site.storage}h · Class ${site.costClass}</span>
+  </div>`,{className:'phes-tt',opacity:1});
+
+  // Lower reservoir marker (small square)
+  if(Number.isFinite(site.llat)&&Number.isFinite(site.llon)&&(Math.abs(site.llat-site.ulat)>0.001||Math.abs(site.llon-site.ulon)>0.001)){
+    const lsz=Math.max(5,sz*0.6);
+    const licon=L.divIcon({
+      className:'',
+      html:`<div class="phes-marker-lower" style="width:${lsz}px;height:${lsz}px;background:${c};"></div>`,
+      iconSize:[lsz,lsz],iconAnchor:[lsz/2,lsz/2],
+    });
+    const lm=L.marker([site.llat,site.llon],{icon:licon}).addTo(map).on('click',()=>selectSite(site,'2d-marker'));
+    lm.bindTooltip(`<div style="font-family:'DM Mono',monospace;font-size:10px;background:#111815;border:1px solid #1e2e29;color:#d4e8e1;border-radius:6px;padding:5px 8px">
+      Lower reservoir · ${site.id}
+    </div>`,{className:'phes-tt',opacity:1});
+    lowerMarkers[site.id]=lm;
+  }
+  return m;
+}
+
+function renderMarkers(){
+  Object.values(markers).forEach(m=>map.removeLayer(m));
+  Object.values(lowerMarkers).forEach(m=>map.removeLayer(m));
+  clearPairLines();
+  markers={};lowerMarkers={};
+  filteredSites.forEach(s=>{markers[s.id]=createMarker(s);drawPairLine(s);});
+}
+
+function fitAll(){
+  if(!filteredSites.length)return;
+  const pts=filteredSites.flatMap(s=>[[s.ulat,s.ulon],[s.llat,s.llon]]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
+  if(pts.length)map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});
+}
+
+// ── SITE LIST ────────────────────────────────────────────────────────────────
+function costPillClass(cc){return`pill-cost-${(cc||'E').toUpperCase()}`;}
+function energyPillClass(e){return e>=10?'pill-high':e>=3?'pill-mid':'pill-low';}
+
+function renderList(){
+  const sortValue=(s)=>{
+    if(sortKey==='cost_class')return(s.costClass||'E').charCodeAt(0);
+    if(sortKey==='sep')return s.sep;
+    return Number.isFinite(s[sortKey])?s[sortKey]:-1;
+  };
+  const asc=sortKey==='sep'||sortKey==='cost_class';
+  const sorted=[...filteredSites].sort((a,b)=>asc?sortValue(a)-sortValue(b):sortValue(b)-sortValue(a));
+  document.getElementById('site-list').innerHTML=sorted.map((s,i)=>`
+    <div class="site-item${selectedSite?.id===s.id?' selected':''}" data-id="${s.id}"
+         style="animation-delay:${i*0.015}s" onclick='selectSiteById("${s.id}")'>
+      <div class="site-item-top">
+        <span class="site-id">${s.id}</span>
+        <span class="site-pill ${energyPillClass(s.energy)}">${s.energy} GWh</span>
+      </div>
+      <div class="site-name">${s.country}</div>
+      <div class="site-meta">
+        <span>${s.head}m head</span>
+        <span>${s.storage}h</span>
+        <span>${s.sep}km</span>
+        <span class="site-pill ${costPillClass(s.costClass)}">Class ${s.costClass}</span>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('site-count').textContent=`${sorted.length} sites`;
+}
+
+// ── STATS ────────────────────────────────────────────────────────────────────
+function updateStats(){
+  const totalE=filteredSites.reduce((s,x)=>s+x.energy,0);
+  const totalP=filteredSites.reduce((s,x)=>s+x.power,0);
+  const countries=new Set(filteredSites.map(x=>x.country)).size;
+  document.getElementById('stat-sites').textContent=filteredSites.length;
+  document.getElementById('stat-energy').textContent=(totalE/1000).toFixed(1);
+  document.getElementById('stat-power').textContent=totalP.toFixed(0);
+  document.getElementById('stat-countries').textContent=countries;
+}
+
+// ── FILTERS ──────────────────────────────────────────────────────────────────
+function applyFilters(){
+  const minE=parseFloat(document.getElementById('f-energy').value);
+  const minH=parseFloat(document.getElementById('f-head').value);
+  const maxSep=parseFloat(document.getElementById('f-sep').value);
+  const maxSepVal=parseFloat(document.getElementById('f-sep').max);
+  filteredSites=allSites.filter(s=>
+    s.energy>=minE&&s.head>=minH&&
+    (maxSep>=maxSepVal||s.sep<=maxSep)&&
+    (storageFilter==='all'||String(s.storage)===storageFilter)&&
+    (costFilter==='all'||s.costClass===costFilter)&&
+    (regionFilter==='all'||s.region===regionFilter)
+  );
+  if(selectedSite&&!filteredSites.some(s=>s.id===selectedSite.id))closeDetail();
+  renderMarkers();renderList();updateStats();
+  if(demSurfaceReady)renderTerrainSiteMarkers();
+}
+
+document.getElementById('f-energy').addEventListener('input',e=>{document.getElementById('lbl-energy').textContent=`${e.target.value} GWh`;applyFilters();});
+document.getElementById('f-head').addEventListener('input',e=>{document.getElementById('lbl-head').textContent=`${e.target.value} m`;applyFilters();});
+document.getElementById('f-sep').addEventListener('input',e=>{
+  const v=Number(e.target.value),max=Number(e.target.max);
+  document.getElementById('lbl-sep').textContent=v>=max?'Any km':`${v} km`;applyFilters();
+});
+
+document.querySelectorAll('[data-region]').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('[data-region]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');regionFilter=btn.dataset.region;applyFilters();
+}));
+document.querySelectorAll('[data-storage]').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('[data-storage]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');storageFilter=btn.dataset.storage;
+  document.getElementById('lbl-storage').textContent=storageFilter==='all'?'Any':`${storageFilter}h`;
+  applyFilters();
+}));
+document.querySelectorAll('[data-cost]').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('[data-cost]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');costFilter=btn.dataset.cost;
+  document.getElementById('lbl-cost').textContent=costFilter==='all'?'All':`Class ${costFilter}`;
+  applyFilters();
+}));
+document.querySelectorAll('[data-sort]').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('[data-sort]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');sortKey=btn.dataset.sort;renderList();
+}));
+
+// ── DETAIL PANEL ─────────────────────────────────────────────────────────────
+function selectSiteById(id){selectSite(allSites.find(s=>s.id===id));}
+
+function selectSite(site,source='generic'){
+  if(!site)return;
+  selectedSite=site;
+  document.querySelectorAll('.site-item').forEach(el=>el.classList.toggle('selected',el.dataset.id===site.id));
+  map.flyTo([site.ulat,site.ulon],9,{duration:1.2});
+
+  // pulse upper marker
+  Object.values(markers).forEach(m=>{const d=m.getElement()?.querySelector('.phes-marker');if(d)d.style.transform='';});
+  const sel=markers[site.id]?.getElement()?.querySelector('.phes-marker');
+  if(sel)sel.style.transform='scale(1.5)';
+
+  // fill panel
+  document.getElementById('d-name').textContent=site.id;
+  document.getElementById('d-coords').textContent=`${site.country} · ${site.region}`;
+  document.getElementById('d-energy').textContent=site.energy;
+  document.getElementById('d-power').textContent=site.power.toFixed(2);
+
+  const cc=site.costClass||'—';
+  const badge=document.getElementById('d-cost-badge');
+  badge.textContent=cc;badge.className=`cost-class-badge cc${cc}`;
+
+  // pair table
+  document.getElementById('d-ulat').textContent=site.ulat.toFixed(4)+'°';
+  document.getElementById('d-ulon').textContent=site.ulon.toFixed(4)+'°';
+  document.getElementById('d-llat').textContent=Number.isFinite(site.llat)?site.llat.toFixed(4)+'°':'—';
+  document.getElementById('d-llon').textContent=Number.isFinite(site.llon)?site.llon.toFixed(4)+'°':'—';
+  document.getElementById('d-udamh').textContent=site.udamh?`${site.udamh} m`:'—';
+  document.getElementById('d-ldamh').textContent=site.ldamh?`${site.ldamh} m`:'—';
+  document.getElementById('d-uarea').textContent=site.uarea?`${site.uarea} ha`:'—';
+  document.getElementById('d-larea').textContent=site.larea?`${site.larea} ha`:'—';
+
+  document.getElementById('d-head').textContent=`${site.head} m`;
+  document.getElementById('d-volume').textContent=`${site.volume} GL`;
+  document.getElementById('d-sep').textContent=`${site.sep} km`;
+  document.getElementById('d-storage').textContent=`${site.storage} h`;
+  document.getElementById('d-slope').textContent=site.slope||'—';
+  document.getElementById('d-wratio').textContent=site.wratio||'—';
+  document.getElementById('d-country').textContent=site.country;
+  document.getElementById('d-region').textContent=site.region;
+  document.getElementById('d-alt').textContent=site.alt?`${site.alt} m asl`:'—';
+
+  // bars
+  const maxE=Math.max(...allSites.map(s=>s.energy));
+  const maxH=Math.max(...allSites.map(s=>s.head));
+  const maxV=Math.max(...allSites.map(s=>s.volume));
+  const maxP=Math.max(...allSites.map(s=>s.power));
+  const pE=(site.energy/maxE*100).toFixed(0);
+  const pH=(site.head/maxH*100).toFixed(0);
+  const pV=(site.volume/maxV*100).toFixed(0);
+  const pP=(site.power/maxP*100).toFixed(0);
+  document.getElementById('bar-energy').style.width=pE+'%';
+  document.getElementById('bar-head').style.width=pH+'%';
+  document.getElementById('bar-volume').style.width=pV+'%';
+  document.getElementById('bar-power').style.width=pP+'%';
+  document.getElementById('barlbl-energy').textContent=pE+'%';
+  document.getElementById('barlbl-head').textContent=pH+'%';
+  document.getElementById('barlbl-volume').textContent=pV+'%';
+  document.getElementById('barlbl-power').textContent=pP+'%';
+
+  document.getElementById('detail-panel').classList.add('open');
+  if(demSurfaceReady)renderTerrainSiteMarkers();
+  update3DSiteSelection();
+}
+
+function closeDetail(){
+  selectedSite=null;
+  document.getElementById('detail-panel').classList.remove('open');
+  document.querySelectorAll('.site-item').forEach(el=>el.classList.remove('selected'));
+  Object.values(markers).forEach(m=>{const d=m.getElement()?.querySelector('.phes-marker');if(d)d.style.transform='';});
+  if(demSurfaceReady)renderTerrainSiteMarkers();
+  update3DSiteSelection();
+}
+
+function exportSite(){
+  if(!selectedSite)return;
+  const s=selectedSite;
+  const hdr='Pair Identifier,Country,Region,Upper latitude,Upper longitude,Lower latitude,Lower longitude,Head (m),Energy (GWh),Volume (GL),Pourpoint separation (km),Upper max dam height (m),Lower max dam height (m),Upper area estimate (ha),Lower area estimate (ha),Storage time (h),Slope,Water-rock ratio,Altitude (m),Cost class,Power (GW)';
+  const row=`${s.id},${s.country},${s.region},${s.ulat},${s.ulon},${s.llat},${s.llon},${s.head},${s.energy},${s.volume},${s.sep},${s.udamh},${s.ldamh},${s.uarea},${s.larea},${s.storage},${s.slope},${s.wratio},${s.alt},${s.costClass},${s.power.toFixed(3)}`;
+  const a=document.createElement('a');
+  a.href='data:text/csv,'+encodeURIComponent(hdr+'\n'+row);
+  a.download=`phes_${s.id}.csv`;a.click();
+}
+
+function exportAll(){
+  const hdr='Pair Identifier,Country,Region,Upper latitude,Upper longitude,Lower latitude,Lower longitude,Head (m),Energy (GWh),Volume (GL),Pourpoint separation (km),Upper max dam height (m),Lower max dam height (m),Upper area estimate (ha),Lower area estimate (ha),Storage time (h),Slope,Water-rock ratio,Altitude (m),Cost class,Power (GW)';
+  const rows=filteredSites.map(s=>`${s.id},${s.country},${s.region},${s.ulat},${s.ulon},${s.llat},${s.llon},${s.head},${s.energy},${s.volume},${s.sep},${s.udamh},${s.ldamh},${s.uarea},${s.larea},${s.storage},${s.slope},${s.wratio},${s.alt},${s.costClass},${s.power.toFixed(3)}`);
+  const a=document.createElement('a');
+  a.href='data:text/csv,'+encodeURIComponent(hdr+'\n'+rows.join('\n'));
+  a.download='phes_filtered_sites.csv';a.click();
+}
+
+function openOSM(){
+  if(!selectedSite)return;
+  window.open(`https://www.openstreetmap.org/?mlat=${selectedSite.ulat}&mlon=${selectedSite.ulon}#map=12/${selectedSite.ulat}/${selectedSite.ulon}`,'_blank');
+}
+
+function zoomPair(){
+  if(!selectedSite)return;
+  const s=selectedSite;
+  if(Number.isFinite(s.llat)&&Number.isFinite(s.llon)){
+    map.fitBounds([[s.ulat,s.ulon],[s.llat,s.llon]],{padding:[80,80]});
+  }else{
+    map.flyTo([s.ulat,s.ulon],12,{duration:1.0});
+  }
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+renderMarkers();renderList();updateStats();fitAll();
+setDataStatus(`Using built-in demo data (${allSites.length} sites across ${new Set(allSites.map(s=>s.country)).size} countries).`);
+</script>
+</body>
+</html>
